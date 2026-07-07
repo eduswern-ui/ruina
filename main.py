@@ -5,7 +5,7 @@ import pytz
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
 
-BASE_URL = 'https://portal.ufsm.br/mobile/webservice'
+BASE_URL = 'https://portal.ufsm.br/mobile/webservice/flutter'
 
 def read_config() -> dict:
     with open('config.yaml', 'r') as document:
@@ -23,23 +23,29 @@ def resolve_restaurant_id(restaurant: int):
 
 def login(username: str, password: str) -> str:
     response = requests.post(
-        f'{BASE_URL}/generateToken',
+        f'{BASE_URL}/generateTokenJwt',
         json={
             'appName': config['environment']['app'],
             'deviceId': config['environment']['device-id'],
             'deviceInfo': config['environment']['device-info'],
             'messageToken': config['environment']['message-token'],
             'login': username,
-            'senha': password
+            'senha': password,
+        },
+        headers={
+            'User-Agent': 'Dart/3.12 (dart:io)',
+            'x-ufsm-version': '50600',
+            'Content-Type': 'application/json; charset=UTF-8'
         }
+        
     )
 
     data = response.json()
 
     if data['error']:
-        raise Exception(data['mensagem'])
+        raise Exception(data.get('mensagem', 'Erro no login'))
     
-    return data['token']
+    return data['body']['accessToken']
 
 def schedule_meal(token: str, start: datetime, end: datetime, options: dict) -> list:
     payload = {
@@ -50,43 +56,28 @@ def schedule_meal(token: str, start: datetime, end: datetime, options: dict) -> 
         'tiposRefeicoes': []
     }
 
+    # O payload precisou ser substituído por um int()
     if options['coffee']:
-        payload['tiposRefeicoes'].append({
-            'descricao': 'Café',
-            'error': False,
-            'item': 1,
-            'itemId': 1,
-            'selecionado': True
-        })
+        payload['tiposRefeicoes'].append(1)
 
     if options['lunch']:
-        payload['tiposRefeicoes'].append({
-            'descricao': 'Almoço',
-            'error': False,
-            'item': 2,
-            'itemId': 2,
-            'selecionado': True
-        })
+        payload['tiposRefeicoes'].append(2)
 
     if options['dinner']:
-        payload['tiposRefeicoes'].append({
-            'descricao': 'Janta',
-            'error': False,
-            'item': 3,
-            'itemId': 3,
-            'selecionado': True
-        })
+        payload['tiposRefeicoes'].append(3)
 
     response = requests.post(
         f'{BASE_URL}/ru/agendaRefeicoes',
         json=payload,
         headers={
+            'User-Agent': 'Dart/3.12 (dart:io)',
+            'x-ufsm-version': '50600',
             'X-UFSM-Device-ID': config['environment']['device-id'],
-            'X-UFSM-Access-Token': token
-        }    
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json; charset=UTF-8'
+        }
     )
-
-    return response.json()
+    return response.json()['body']
 
 def find_schedules(date):
     filtered_schedules = filter(
@@ -144,8 +135,7 @@ if len(tomorrow_schedules) != 0:
                     print('[Erro] ' + message + status['impedimento'] + '.')
                     failed = True
 
-        if failed:
-            sys.exit(1)
+        ##if failed:
+            ##sys.exit(1)
 else:
     print('Não há nenhuma refeição para ser agendada amanhã.')
-
